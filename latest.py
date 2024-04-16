@@ -34,6 +34,7 @@ LINEAR_VEL = 0.1
 STOP_DISTANCE = 0.2 * 2
 LIDAR_ERROR = 0.05
 SAFE_STOP_DISTANCE = STOP_DISTANCE + LIDAR_ERROR
+SAFE_CURCE_DISTANCE = 2* SAFE_STOP_DISTANCE
 
 class Obstacle():
     def __init__(self):
@@ -111,85 +112,64 @@ class Obstacle():
 
             # Get the minimum values from the arrays
             for i in range(len(lidar_distances_left)):
-                if (lidar_distances_right[i] <  2 * SAFE_STOP_DISTANCE):
+                if (lidar_distances_right[i] <  SAFE_CURCE_DISTANCE):
                     right_boolean.append('True')
                 else :
                     right_boolean.append('False')
                 
-                if (lidar_distances_left[i] < 2 * SAFE_STOP_DISTANCE):
+                if (lidar_distances_left[i] < SAFE_CURCE_DISTANCE):
                     left_boolean.append('True')
                 else :
                     left_boolean.append('False')
 
-            #reversed_left_boolean = left_boolean
-            #reversed_left_boolean.reverse()
             reversed_right_boolean = right_boolean
             reversed_right_boolean.reverse()
 
+            # With the boolean arrays for left and right, we check were the first obstacle is, looking from the middle and out.
             try:
-                angle_right =  -45 + left_boolean.index('True')
-            except:
-                angle_right = 0
+                object_angle_right =  -45 + left_boolean.index('True') # Using index, we get the number of angles from the middle and out, 
+            except:                                                    # meaning we sum that with -45 to get the correct angle
+                object_angle_right = 0
             
             try:
-                angle_left = 45 - reversed_right_boolean.index('True')
-                
+                object_angle_left = 45 - reversed_right_boolean.index('True')
             except:
-                angle_left = 0  
-
+                object_angle_left = 0  
             
-            if (remaining_angle == 0):        
-                if (right_boolean.count('False') == 45 and left_boolean.count('False') == 45):
-                    twist.linear.x = MAX_LINEAR_VEL
-                    twist.angular.z = 0
-                    self._cmd_pub.publish(twist)
-                    twist.angular.z = 0
-                    self._cmd_pub.publish(twist)
-                
-                elif (right_boolean.count('False') == 45 and left_boolean.count('True') > 0):
-                    #print('turn right')
-                    remaining_angle = angle_right
+            # Update remaining angle
+            if (remaining_angle == 0):  # If there is no calculated remaining angle, we need to check if there needs to be. 
+                remaining_angle = check_for_remaining_angle(object_angle_left, object_angle_right)
+        
+            # print(remaining_angle)
 
-                elif (left_boolean.count('False') == 45 and right_boolean.count('True') > 0):
-                    #print('turn left')
-                    remaining_angle = angle_left
-                
-                elif (right_boolean.count('True') > 0 and left_boolean.count('True') > 0):
-                    #print('middle')
-                    lowest_angle = min(angle_left, abs(angle_right))
-                    if (lowest_angle == abs(angle_right)):
-                        remaining_angle = angle_right
-                    else :
-                        remaining_angle = angle_left
+            # If the remaining_angle is still 0, then there is no object, and we continue
+            if (remaining_angle == 0):
+                turn(remaining_angle)
+                continue
+            
+            elif (remaining_angle != 0):
+                closest_object_left = min(lidar_distances_left)
+                closest_object_right = min(lidar_distances_right)
 
-            count += 1
-            print(remaining_angle)
-            if (remaining_angle != 0):
-                if (count == 1):
-                    remaining_angle /= 2
-                #print(remaining_angle)
-                angle_scalar = remaining_angle / (min(min(lidar_distances_left), min(lidar_distances_right)) * 100)
+                
+                # This is our calculated angle_scalar, to determine the radius of the turn
+                # The closer the bot is to the object, the higher the angle_scaler is
+                angle_scalar = remaining_angle / ((min(closest_object_left, closest_object_right)) * 100)
+
+                ## For troubleshooting, the angle_scalar can get higher than 1
                 if (angle_scalar > 1):
                     angle_scalar = 1
+
                 #print(angle_scalar)
                 #print(min(min(lidar_distances_right), min(lidar_distances_left)) * 100)
-                if (min(min(lidar_distances_right), min(lidar_distances_left)) * 100 <= 20):
-                    if (remaining_angle >= 0):
-                        angle_scalar = 1
-                        twist.angular.z = angle_scalar * MAX_ANGULAR_VEL
-                        twist.linear.x = 0
-                        self._cmd_pub.publish(twist)
-                        time.sleep(0.1)
-                        remaining_angle = 0
-                    else:
-                        angle_scalar = -1
-                        twist.angular.z = angle_scalar * MAX_ANGULAR_VEL
-                        twist.linear.x = 0
-                        self._cmd_pub.publish(twist)
-                        time.sleep(0.1)
-                        remaining_angle = 0
+
+
+                if (min( closest_object_left, closest_object_right ) * 100 <= SAFE_CURCE_DISTANCE):
+                    ### If we are closer than our SAFE_CURVE_DISTANCE to the object, we need to make a sharp turn ### 
+                    sharp_turn(remaining_angle)
+                    continue
+    
                 
-                #print(angle_scalar)
                 lin_scalar = 1 - abs(angle_scalar)
                 if (lin_scalar < 0):
                     lin_scalar = 0
@@ -203,9 +183,30 @@ class Obstacle():
                 left_boolean = []
                 right_boolean = []
 
-            if (count == 3):
-                remaining_angle = 0
-                count = 0
+
+        def check_for_remaining_angle(self, object_angle_left, object_angle_right):
+            if (right_boolean.count('False') == 45 and left_boolean.count('False') == 45):
+                # If there are no objects, continue forwards
+                # twist.linear.x = MAX_LINEAR_VEL
+                # twist.angular.z = 0
+                # self._cmd_pub.publish(twist)
+                return 0
+            
+            elif (right_boolean.count('False') == 45 and left_boolean.count('True') > 0):
+                # turn right
+                return object_angle_right
+
+            elif (left_boolean.count('False') == 45 and right_boolean.count('True') > 0):
+                # turn left
+                return object_angle_left
+            
+            elif (right_boolean.count('True') > 0 and left_boolean.count('True') > 0):
+                #print('middle')
+                lowest_angle = min(angle_left, abs(angle_right))
+                if (lowest_angle == abs(angle_right)):
+                    return angle_right
+                else :
+                    return angle_left
     
         def turn(self, angle):
             if (angle >= 0):
@@ -228,6 +229,24 @@ class Obstacle():
                 twist.linear.x = lin_scalar * MAX_LINEAR_VEL
                 self._cmd_pub.publish(twist)
                 time.sleep(0.2)
+
+        def sharp_turn(self, remaining_angle):
+            if (remaining_angle >= 0):
+                # And the calculated remaining angle of the object is to the left, we turn right
+                angle_scalar = -1 # Right is minus
+                twist.angular.z = angle_scalar * MAX_ANGULAR_VEL
+                twist.linear.x = 0
+                self._cmd_pub.publish(twist)
+                time.sleep(0.1)
+                remaining_angle = 0
+            else:
+                # else the object must be to the right, turn left
+                angle_scalar = 1
+                twist.angular.z = angle_scalar * MAX_ANGULAR_VEL
+                twist.linear.x = 0
+                self._cmd_pub.publish(twist)
+                time.sleep(0.1)
+                remaining_angle = 0
 
 
     def is_key_available(self):
