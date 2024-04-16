@@ -34,7 +34,7 @@ LINEAR_VEL = 0.1
 STOP_DISTANCE = 0.2 * 2
 LIDAR_ERROR = 0.05
 SAFE_STOP_DISTANCE = STOP_DISTANCE + LIDAR_ERROR
-SAFE_CURCE_DISTANCE = 2* SAFE_STOP_DISTANCE
+SAFE_CURVE_DISTANCE = 2* SAFE_STOP_DISTANCE
 
 class Obstacle():
     def __init__(self):
@@ -78,9 +78,9 @@ class Obstacle():
     def obstacle(self):
         twist = Twist()
         # Go forward
-        turtlebot_moving = True
-        obstacle_right = False
-        obstacle_left = False
+        # turtlebot_moving = True
+        # obstacle_right = False
+        # obstacle_left = False
         remaining_angle = 0
         angle_left = 0
         angle_right = 0
@@ -112,27 +112,27 @@ class Obstacle():
 
             # Get the minimum values from the arrays
             for i in range(len(lidar_distances_left)):
-                if (lidar_distances_right[i] <  SAFE_CURCE_DISTANCE):
-                    right_boolean.append('True')
+                if (lidar_distances_right[i] <  SAFE_STOP_DISTANCE):
+                    right_boolean.append(True)
                 else :
-                    right_boolean.append('False')
+                    right_boolean.append(False)
                 
-                if (lidar_distances_left[i] < SAFE_CURCE_DISTANCE):
-                    left_boolean.append('True')
+                if (lidar_distances_left[i] < SAFE_STOP_DISTANCE):
+                    left_boolean.append(True)
                 else :
-                    left_boolean.append('False')
+                    left_boolean.append(False)
 
             reversed_right_boolean = right_boolean
             reversed_right_boolean.reverse()
 
             # With the boolean arrays for left and right, we check were the first obstacle is, looking from the middle and out.
             try:
-                object_angle_right =  -45 + left_boolean.index('True') # Using index, we get the number of angles from the middle and out, 
+                object_angle_right =  -45 + left_boolean.index(True) # Using index, we get the number of angles from the middle and out, 
             except:                                                    # meaning we sum that with -45 to get the correct angle
                 object_angle_right = 0
             
             try:
-                object_angle_left = 45 - reversed_right_boolean.index('True')
+                object_angle_left = 45 - reversed_right_boolean.index(True)
             except:
                 object_angle_left = 0  
             
@@ -166,9 +166,9 @@ class Obstacle():
                 #print(min(min(lidar_distances_right), min(lidar_distances_left)) * 100)
 
 
-                if (min( closest_object_left, closest_object_right ) * 100 <= SAFE_CURCE_DISTANCE):
+                if (min( closest_object_left, closest_object_right ) * 100 <= SAFE_CURVE_DISTANCE):
                     ### If we are closer than our SAFE_CURVE_DISTANCE to the object, we need to make a sharp turn ### 
-                    sharp_turn(remaining_angle)
+                    sharp_turn(lidar_distances_left, lidar_distances_right)
                     continue
     
                 
@@ -187,19 +187,19 @@ class Obstacle():
 
 
         def check_for_remaining_angle(self, object_angle_left, object_angle_right):
-            if (right_boolean.count('False') == 45 and left_boolean.count('False') == 45):
+            if (right_boolean.count(False) == 45 and left_boolean.count(False) == 45):
                 # If there are no objects, continue forwards
                 return 0
             
-            elif (right_boolean.count('False') == 45 and left_boolean.count('True') > 0):
+            elif (right_boolean.count(False) == 45 and left_boolean.count(True) > 0):
                 # turn right
                 return object_angle_right
 
-            elif (left_boolean.count('False') == 45 and right_boolean.count('True') > 0):
+            elif (left_boolean.count(False) == 45 and right_boolean.count(True) > 0):
                 # turn left
                 return object_angle_left
             
-            elif (right_boolean.count('True') > 0 and left_boolean.count('True') > 0):
+            elif (right_boolean.count(True) > 0 and left_boolean.count(True) > 0):
                 #print('middle')
                 lowest_angle = min(angle_left, abs(angle_right))
                 if (lowest_angle == abs(angle_right)):
@@ -229,15 +229,17 @@ class Obstacle():
                 self._cmd_pub.publish(twist)
                 time.sleep(0.2)
 
-        def sharp_turn(self, remaining_angle):
-            if (remaining_angle >= 0):
-                # And the calculated remaining angle of the object is to the left, we turn right
+        def sharp_turn(self, lidar_distances_left, lidar_distances_right):
+            closest_left = min(lidar_distances_left)
+            closest_right = min(lidar_distances_right)
+            if (closest_left < closest_right):
                 angle_scalar = -1 # Right is minus
                 twist.angular.z = angle_scalar * MAX_ANGULAR_VEL
                 twist.linear.x = 0
                 self._cmd_pub.publish(twist)
                 time.sleep(0.1)
                 remaining_angle = 0
+                return
             else:
                 # else the object must be to the right, turn left
                 angle_scalar = 1
@@ -246,6 +248,8 @@ class Obstacle():
                 self._cmd_pub.publish(twist)
                 time.sleep(0.1)
                 remaining_angle = 0
+                return
+
 
 
     def is_key_available(self):
