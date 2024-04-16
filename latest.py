@@ -147,11 +147,13 @@ class Obstacle():
                 turn(remaining_angle)
                 continue
             
+
+            # ------------ Now we check how much the bot has to turn -------------- #
             elif (remaining_angle != 0):
                 closest_object_left = min(lidar_distances_left)
                 closest_object_right = min(lidar_distances_right)
 
-                
+
                 # This is our calculated angle_scalar, to determine the radius of the turn
                 # The closer the bot is to the object, the higher the angle_scaler is
                 angle_scalar = remaining_angle / ((min(closest_object_left, closest_object_right)) * 100)
@@ -178,8 +180,8 @@ class Obstacle():
                 twist.linear.x = lin_scalar * MAX_LINEAR_VEL
                 self._cmd_pub.publish(twist)
                 time.sleep(0.1)
-                twist.angular.z = 0
-                self._cmd_pub.publish(twist)
+                # twist.angular.z = 0
+                # self._cmd_pub.publish(twist)
                 left_boolean = []
                 right_boolean = []
 
@@ -187,9 +189,6 @@ class Obstacle():
         def check_for_remaining_angle(self, object_angle_left, object_angle_right):
             if (right_boolean.count('False') == 45 and left_boolean.count('False') == 45):
                 # If there are no objects, continue forwards
-                # twist.linear.x = MAX_LINEAR_VEL
-                # twist.angular.z = 0
-                # self._cmd_pub.publish(twist)
                 return 0
             
             elif (right_boolean.count('False') == 45 and left_boolean.count('True') > 0):
